@@ -1,5 +1,5 @@
 from django.contrib import admin
-from jobsapp.models import Job, Favorite
+from jobsapp.models import Job, Favorite, Applicant
 
 
 @admin.register(Job)
@@ -19,3 +19,4 @@ class JobAdmin(admin.ModelAdmin):
     list_filter = ["salary", "last_date", "created_at", "user"]
     date_hierarchy = "created_at"
 admin.site.register(Favorite)
+admin.site.register(Applicant)

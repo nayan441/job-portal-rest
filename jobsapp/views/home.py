@@ -84,10 +84,6 @@ def favorite(request):
     #     return JsonResponse(data={"auth": False, "status": "error"})
 
     job_id = request.POST.get("job_id")
-    print(job_id)
-    print(job_id)
-    print(job_id)
-    print(job_id)
     # user_id = request.user.id
     user_id = 1
     try:
