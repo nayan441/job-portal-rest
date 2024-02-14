@@ -17,7 +17,6 @@ class RegisterEmployeeView(CreateView):
 
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            print("-----------------------------------------------------------")
             return HttpResponseRedirect(self.success_url)
         return super().dispatch(self.request, *args, **kwargs)
 
@@ -74,7 +73,6 @@ class LoginView(FormView):
     extra_context = {"title": "Login"}
 
     def dispatch(self, request, *args, **kwargs):
-        print("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
         if self.request.user.is_authenticated:
             return HttpResponseRedirect(self.get_success_url())
         return super().dispatch(self.request, *args, **kwargs)

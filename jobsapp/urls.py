@@ -1,10 +1,12 @@
-from django.urls import path, include
-# from .views import index
-from .views.home import HomeView, JobListView, JobDetailsView, SearchView, favorite
-from .views.employee import FavoriteListView, EmployeeMyJobsListView
-from .views.employer import (filled, DashboardView, ApplicantsListView,
-                            ApplicantPerJobView, AppliedApplicantView,
-                            SendResponseView, JobCreateView, JobUpdateView)
+from django.urls import include, path
+from .views.employee import EmployeeMyJobsListView, FavoriteListView
+from .views.employer import (ApplicantPerJobView, ApplicantsListView,
+                             AppliedApplicantView, DashboardView,
+                             JobCreateView, JobUpdateView, SendResponseView,
+                             filled)
+from .views.home import (ApplyJobView, HomeView, JobDetailsView, JobListView,
+                         SearchView, favorite)
+
 app_name = "jobs"
 
 urlpatterns = [
@@ -13,6 +15,8 @@ urlpatterns = [
     path("jobs/<int:id>/", JobDetailsView.as_view(), name="jobs-detail"),
     path("search/", SearchView.as_view(), name="search"),
     path("favorite/", favorite, name="favorite"),
+    path("apply-job/<int:job_id>/", ApplyJobView.as_view(), name="apply-job"),
+
     path(
         "employee/",
             include(

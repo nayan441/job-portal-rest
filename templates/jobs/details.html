@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load is_already_applied %}
+{% load is_job_expired %}
 {% load humanize %}
 {% block title %}
     Job details
@@ -45,13 +46,18 @@
                     </blockquote>
                     <div class="job-detail__apply-bottom">
                         {% if request.user.is_authenticated and user.role == 'employee' %}
+                        {% is_job_expired  job.last_date as expired %}
                             {% is_already_applied job request.user as is_applied %}
                             {% if is_applied %}
-                                <input type="button" class="btn btn-outline-white-primary" value="Already applied"/>
+                                <!-- <input type="button" class="btn btn-outline-white-primary" value="Already applied"/> -->
+                                <div>Already applied</div>
+                            {% elif expired %}
+                                
+                                <div>Already Expired</div>
                             {% else %}
-                                <form action="{# % url 'jobs:apply-job' job.id % #}" method="post">
+                                <form action="{% url 'jobs:apply-job' job.id %}" method="post">
                                     {% csrf_token %}
-                                    <input type="hidden" name="job" value="{{ job.id }}">
+                                    <input type="text" name="job" value="{{ job.id }}">
                                     <input type="submit" class="btn btn-outline-white-primary"
                                            value="Apply for this job"/>
                                 </form>
@@ -78,9 +84,10 @@
                     {% if user.is_authenticated and user.role == 'employee' %}
                         <div class="job-detail__apply-top">
                             {% if is_applied %}
-                                <input type="button" class="btn btn-outline-white-primary" value="Already applied"/>
+                                <!-- <input type="button" class="btn btn-outline-white-primary" value="Already applied"/> -->
+                                <div>Already applied</div>
                             {% else %}
-                                <form action="{# % url 'jobs:apply-job' job.id % #}" method="post">
+                                <form action="{% url 'jobs:apply-job' job.id %}" method="post">
                                     {% csrf_token %}
                                     <input type="hidden" name="job" value="{{ job.id }}">
                                     <input type="submit" class="btn btn-outline-white-primary"

@@ -1,12 +1,20 @@
-from django.http import Http404, HttpResponseRedirect, JsonResponse, HttpResponseNotAllowed
-from django.views.generic import ListView, DetailView, CreateView
-from ..models import  Job, Applicant, Favorite
-from django.utils import timezone
+from typing import Any
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import (
+    Http404,
+    HttpResponseNotAllowed,
+    HttpResponseRedirect,
+    JsonResponse,
+)
+from django.urls import reverse_lazy
+from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.views.generic import CreateView, DetailView, ListView
 
-
+from ..decorators import user_is_employee
+from ..forms import ApplyJobForm
+from ..models import Applicant, Favorite, Job
 
 
 class HomeView(ListView):
@@ -19,10 +27,25 @@ class HomeView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["trendings"] = self.model.objects.unfilled(created_at__month=timezone.now().month)[:3]
+        context["trendings"] = self.model.objects.unfilled(
+            created_at__month=timezone.now().month
+        )[:3]
         return context
 
 
+class SearchView(ListView):
+    model = Job
+    template_name = "jobs/search.html"
+    context_object_name = "jobs"
+
+    def get_queryset(self):
+        # q = JobDocument.search().query("match", title=self.request.GET['position']).to_queryset()
+        # print(q)
+        # return q
+        return self.model.objects.filter(
+            location__contains=self.request.GET.get("location", ""),
+            title__contains=self.request.GET.get("position", ""),
+        )
 
 
 class JobListView(ListView):
@@ -36,7 +59,7 @@ class JobListView(ListView):
 
     def get_context_data(self, **kwargs):
         data = super().get_context_data(**kwargs)
-        data['total_jobs'] = self.model.objects.unfilled().count()
+        data["total_jobs"] = self.model.objects.unfilled().count()
         return data
 
 
@@ -45,6 +68,10 @@ class JobDetailsView(DetailView):
     template_name = "jobs/details.html"
     context_object_name = "job"
     pk_url_kwarg = "id"
+
+    def __init__(self, **kwargs: Any) -> None:
+        return super(JobDetailsView, self).__init__(**kwargs)
+
 
     def get_object(self, queryset=None):
         obj = super(JobDetailsView, self).get_object(queryset=queryset)
@@ -61,39 +88,107 @@ class JobDetailsView(DetailView):
         context = self.get_context_data(object=self.object)
         return self.render_to_response(context)
 
-class SearchView(ListView):
-    model = Job
-    template_name = "jobs/search.html"
-    context_object_name = "jobs"
+from accounts.models import User
 
-    def get_queryset(self):
-        # q = JobDocument.search().query("match", title=self.request.GET['position']).to_queryset()
-        # print(q)
-        # return q
-        return self.model.objects.filter(
-            location__contains=self.request.GET.get("location", ""),
-            title__contains=self.request.GET.get("position", ""),
-        )
+class ApplyJobView(CreateView):
+    model = Applicant
+    form_class = ApplyJobForm
+    slug_field = "job_id"
+    slug_url_kwarg = "job_id"
+
+    @method_decorator(login_required(login_url=reverse_lazy("accounts:login")))
+    @method_decorator(user_is_employee)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(self.request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        return HttpResponseNotAllowed(self._allowed_methods())
+
+
+    def is_free_user(self, user):
+        unpaid_users = User.objects.unpaid()
+        print(unpaid_users)
+        if user in unpaid_users:
+        # Replace this with your logic to determine if the user is a free user
+            return True  
+        else:
+            return False
+
+    def has_reached_daily_limit(self, user):
+        # Count the number of job applications made by the user in the last 24 hours
+        twenty_four_hours_ago = timezone.now() - timezone.timedelta(days=1)
+        applications_today = Applicant.objects.filter(user=user, created_at__gte=twenty_four_hours_ago).count()
+
+        # Replace 1 with the desired daily limit for free users
+        return applications_today >= 2
     
+    def post(self, request, *args, **kwargs):
+        user = request.user
+        if self.is_free_user(user):
+            if self.has_reached_daily_limit(user):
+                messages.error(self.request, "You have reached the daily application limit.")
+                return HttpResponseRedirect(reverse_lazy("jobs:home"))
 
-from django.views.decorators.csrf import csrf_exempt
+        form = self.get_form()
+        if form.is_valid():
+            messages.info(self.request, "Successfully applied for the job!")
+            return self.form_valid(form)
+        else:
+            return HttpResponseRedirect(reverse_lazy("jobs:home"))
 
-@csrf_exempt
+
+
+
+
+
+
+    def get_success_url(self):
+        return reverse_lazy("jobs:jobs-detail", kwargs={"id": self.kwargs["job_id"]})
+
+    # def get_form_kwargs(self):
+    #     kwargs = super(ApplyJobView, self).get_form_kwargs()
+    #     print(kwargs)
+    #     kwargs['job'] = 1
+    #     return kwargs
+
+    def form_valid(self, form):
+        # check if user already applied
+        applicant = Applicant.objects.filter(
+            user_id=self.request.user.id, job_id=self.kwargs["job_id"]
+        )
+        if applicant:
+            messages.info(self.request, "You already applied for this job")
+            return HttpResponseRedirect(self.get_success_url())
+        # save applicant
+        form.instance.user = self.request.user
+        form.save()
+        return super().form_valid(form)
+
+
 def favorite(request):
-    # if not request.user.is_authenticated:
-    #     return JsonResponse(data={"auth": False, "status": "error"})
+    if not request.user.is_authenticated:
+        return JsonResponse(data={"auth": False, "status": "error"})
 
     job_id = request.POST.get("job_id")
-    # user_id = request.user.id
-    user_id = 1
+    user_id = request.user.id
     try:
         fav = Favorite.objects.get(job_id=job_id, user_id=user_id, soft_deleted=False)
         if fav:
             fav.soft_deleted = True
             fav.save()
             return JsonResponse(
-                data={"auth": True, "status": "removed", "message": "Job removed from your favorite list"}
+                data={
+                    "auth": True,
+                    "status": "removed",
+                    "message": "Job removed from your favorite list",
+                }
             )
     except Favorite.DoesNotExist:
         Favorite.objects.create(job_id=job_id, user_id=user_id)
-        return JsonResponse(data={"auth": True, "status": "added", "message": "Job added to your favorite list"})
+        return JsonResponse(
+            data={
+                "auth": True,
+                "status": "added",
+                "message": "Job added to your favorite list",
+            }
+        )
